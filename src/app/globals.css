@@ -1,0 +1,174 @@
+/* Custom premium styling override for Bootstrap */
+
+:root {
+  --yuki-bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+  --yuki-glass-bg: rgba(255, 255, 255, 0.7);
+  --yuki-glass-border: rgba(255, 255, 255, 0.4);
+  --yuki-primary-grad: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  --yuki-success-grad: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --yuki-warning-grad: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --yuki-danger-grad: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  --yuki-card-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+  --yuki-hover-shadow: 0 15px 35px rgba(124, 58, 237, 0.15);
+}
+
+body {
+  background: var(--yuki-bg-gradient);
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #1f2937;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism Classes */
+.glass-navbar {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+
+.glass-card {
+  background: var(--yuki-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--yuki-glass-border);
+  border-radius: 16px;
+  box-shadow: var(--yuki-card-shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--yuki-hover-shadow);
+  border-color: rgba(124, 58, 237, 0.2);
+}
+
+/* Custom Gradients */
+.bg-gradient-primary-yuki {
+  background: var(--yuki-primary-grad) !important;
+  color: white;
+}
+
+.bg-gradient-success-yuki {
+  background: var(--yuki-success-grad) !important;
+  color: white;
+}
+
+.bg-gradient-warning-yuki {
+  background: var(--yuki-warning-grad) !important;
+  color: white;
+}
+
+.bg-gradient-danger-yuki {
+  background: var(--yuki-danger-grad) !important;
+  color: white;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.delay-1 {
+  animation-delay: 0.1s;
+}
+
+.delay-2 {
+  animation-delay: 0.2s;
+}
+
+.delay-3 {
+  animation-delay: 0.3s;
+}
+
+.delay-4 {
+  animation-delay: 0.4s;
+}
+
+/* Task List Specific Interactive Elements */
+.task-item {
+  border-left: 5px solid transparent;
+  transition: all 0.25s ease;
+}
+
+.task-item.priority-high {
+  border-left-color: #ef4444;
+}
+
+.task-item.priority-medium {
+  border-left-color: #f59e0b;
+}
+
+.task-item.priority-low {
+  border-left-color: #10b981;
+}
+
+.task-item.completed {
+  opacity: 0.6;
+  text-decoration: line-through;
+  background-color: rgba(243, 244, 246, 0.5) !important;
+}
+
+.task-checkbox {
+  width: 1.4em;
+  height: 1.4em;
+  cursor: pointer;
+  border-radius: 50% !important;
+  border-color: #a78bfa !important;
+  transition: all 0.2s ease;
+}
+
+.task-checkbox:checked {
+  background-color: #7c3aed !important;
+  border-color: #7c3aed !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c7d2fe;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a78bfa;
+}
+
+/* Hover Zoom Micro-animation */
+.hover-zoom {
+  transition: transform 0.2s ease;
+}
+.hover-zoom:hover {
+  transform: scale(1.03);
+}
+
+.glow-btn {
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+  transition: all 0.2s ease;
+}
+
+.glow-btn:hover {
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
+  transform: translateY(-1px);
+}
