@@ -124,7 +124,7 @@ export default function Home() {
             <span className="p-2 bg-gradient-primary-yuki rounded-3 me-2 d-inline-flex align-items-center justify-content-center text-white" style={{ width: "38px", height: "38px" }}>
               <i className="bi bi-stack"></i>
             </span>
-            Yuki ciuu <span className="text-primary fw-semibold ms-1">TaskFlow</span>
+            Yuki kunn <span className="text-primary fw-semibold ms-1">TaskFlow</span>
           </a>
           <div className="d-flex align-items-center gap-3">
             <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill d-none d-md-inline-block">
