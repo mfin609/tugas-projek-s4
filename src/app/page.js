@@ -124,7 +124,7 @@ export default function Home() {
             <span className="p-2 bg-gradient-primary-yuki rounded-3 me-2 d-inline-flex align-items-center justify-content-center text-white" style={{ width: "38px", height: "38px" }}>
               <i className="bi bi-stack"></i>
             </span>
-            Yuki <span className="text-primary fw-semibold ms-1">TaskFlow</span>
+            Yuki ciuu <span className="text-primary fw-semibold ms-1">TaskFlow</span>
           </a>
           <div className="d-flex align-items-center gap-3">
             <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill d-none d-md-inline-block">
@@ -145,7 +145,7 @@ export default function Home() {
 
       {/* Main Body Wrapper */}
       <div className="container py-5 flex-grow-1">
-        
+
         {/* Welcome & Overview Row */}
         <div className="row mb-5 align-items-center fade-in-up">
           <div className="col-lg-7 mb-4 mb-lg-0">
@@ -156,7 +156,7 @@ export default function Home() {
               Kelola tugas, jadwal, dan progres pengerjaan projek semester 4 Anda dengan efisien.
             </p>
           </div>
-          
+
           {/* Global Completion Progress Card */}
           <div className="col-lg-5">
             <div className="glass-card p-4">
@@ -242,7 +242,7 @@ export default function Home() {
               <h5 className="fw-bold text-dark mb-3">
                 <i className="bi bi-funnel-fill text-primary me-2"></i>Filter & Pencarian
               </h5>
-              
+
               {/* Search input */}
               <div className="input-group mb-3">
                 <span className="input-group-text bg-white border-end-0 text-muted">
@@ -261,36 +261,32 @@ export default function Home() {
               <div className="d-flex flex-column gap-2">
                 <button
                   onClick={() => setStatusFilter("all")}
-                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${
-                    statusFilter === "all" ? "bg-primary text-white" : "btn-light text-dark"
-                  }`}
+                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${statusFilter === "all" ? "bg-primary text-white" : "btn-light text-dark"
+                    }`}
                 >
                   <span><i className="bi bi-grid-fill me-2"></i>Semua Tugas</span>
                   <span className={`badge ${statusFilter === "all" ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-muted"}`}>{tasks.length}</span>
                 </button>
                 <button
                   onClick={() => setStatusFilter("ongoing")}
-                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${
-                    statusFilter === "ongoing" ? "bg-primary text-white" : "btn-light text-dark"
-                  }`}
+                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${statusFilter === "ongoing" ? "bg-primary text-white" : "btn-light text-dark"
+                    }`}
                 >
                   <span><i className="bi bi-circle me-2"></i>Belum Selesai</span>
                   <span className={`badge ${statusFilter === "ongoing" ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-muted"}`}>{ongoingTasks}</span>
                 </button>
                 <button
                   onClick={() => setStatusFilter("completed")}
-                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${
-                    statusFilter === "completed" ? "bg-primary text-white" : "btn-light text-dark"
-                  }`}
+                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${statusFilter === "completed" ? "bg-primary text-white" : "btn-light text-dark"
+                    }`}
                 >
                   <span><i className="bi bi-check-circle me-2"></i>Selesai</span>
                   <span className={`badge ${statusFilter === "completed" ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-muted"}`}>{completedTasks}</span>
                 </button>
                 <button
                   onClick={() => setStatusFilter("high-priority")}
-                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${
-                    statusFilter === "high-priority" ? "bg-primary text-white" : "btn-light text-dark"
-                  }`}
+                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${statusFilter === "high-priority" ? "bg-primary text-white" : "btn-light text-dark"
+                    }`}
                 >
                   <span><i className="bi bi-exclamation-octagon me-2"></i>Prioritas Tinggi</span>
                   <span className={`badge ${statusFilter === "high-priority" ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-muted"}`}>{tasks.filter(t => t.priority === "high").length}</span>
@@ -415,9 +411,8 @@ export default function Home() {
                   filteredTasks.map((task) => (
                     <div
                       key={task.id}
-                      className={`task-item priority-${task.priority} ${
-                        task.completed ? "completed" : ""
-                      } p-3 bg-white border border-light-subtle rounded-3 shadow-sm d-flex align-items-center justify-content-between`}
+                      className={`task-item priority-${task.priority} ${task.completed ? "completed" : ""
+                        } p-3 bg-white border border-light-subtle rounded-3 shadow-sm d-flex align-items-center justify-content-between`}
                     >
                       <div className="d-flex align-items-center gap-3">
                         <input
@@ -448,18 +443,17 @@ export default function Home() {
                       <div className="d-flex align-items-center gap-2">
                         {/* Priority Badge */}
                         <span
-                          className={`badge px-2.5 py-1.5 rounded-pill text-uppercase fw-semibold d-none d-sm-inline-block ${
-                            task.priority === "high"
-                              ? "bg-danger bg-opacity-10 text-danger border border-danger-subtle"
-                              : task.priority === "medium"
+                          className={`badge px-2.5 py-1.5 rounded-pill text-uppercase fw-semibold d-none d-sm-inline-block ${task.priority === "high"
+                            ? "bg-danger bg-opacity-10 text-danger border border-danger-subtle"
+                            : task.priority === "medium"
                               ? "bg-warning bg-opacity-10 text-warning border border-warning-subtle"
                               : "bg-success bg-opacity-10 text-success border border-success-subtle"
-                          }`}
+                            }`}
                           style={{ fontSize: "0.7rem" }}
                         >
                           {task.priority === "high" ? "Tinggi" : task.priority === "medium" ? "Sedang" : "Rendah"}
                         </span>
-                        
+
                         {/* Delete button */}
                         <button
                           onClick={() => deleteTask(task.id)}
