@@ -1,6 +1,26 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { verifyJWT } from '@/lib/auth';
+import { z } from 'zod';
+import rateLimit from '@/lib/rate-limit';
+
+const limiter = rateLimit({
+  interval: 60 * 1000,
+  uniqueTokenPerInterval: 500,
+});
+
+const bookingSchema = z.object({
+  customerName: z.string().min(1, 'Nama wajib diisi'),
+  customerPhone: z.string().min(5, 'Nomor telepon tidak valid'),
+  outletId: z.number().int().positive(),
+  items: z.array(
+    z.object({
+      productId: z.number().int().positive(),
+      quantity: z.number().int().positive(),
+    })
+  ).min(1, 'Keranjang belanja kosong'),
+});
 
 // GET: Admin melihat booking di outletnya
 export async function GET() {
@@ -12,7 +32,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
-    const session = JSON.parse(sessionCookie.value);
+    const session = await verifyJWT(sessionCookie.value);
+    if (!session) {
+      return NextResponse.json({ error: 'Sesi tidak valid' }, { status: 401 });
+    }
 
     const bookings = await prisma.booking.findMany({
       where: { outletId: session.outletId },
@@ -35,36 +58,38 @@ export async function GET() {
 // POST: Pelanggan membuat booking baru
 export async function POST(request) {
   try {
-    const { customerName, customerPhone, outletId, items } = await request.json();
-
-    if (!customerName || !customerPhone || !outletId || !items || items.length === 0) {
-      return NextResponse.json({ error: 'Data booking tidak lengkap' }, { status: 400 });
+    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    try {
+      await limiter.check(20, ip);
+    } catch {
+      return NextResponse.json({ error: 'Terlalu banyak request, silakan coba lagi nanti' }, { status: 429 });
     }
 
-    // Validasi stok cukup untuk setiap item
-    for (const item of items) {
-      const stock = await prisma.stock.findUnique({
-        where: { productId_outletId: { productId: item.productId, outletId: parseInt(outletId) } },
-      });
+    const body = await request.json();
+    const validation = bookingSchema.safeParse(body);
 
-      if (!stock) {
-        return NextResponse.json({ error: `Produk tidak tersedia di outlet ini` }, { status: 400 });
-      }
-      if (stock.stock < item.quantity) {
-        return NextResponse.json({
-          error: `Stok tidak cukup. Stok tersedia: ${stock.stock}`,
-        }, { status: 400 });
-      }
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error.errors[0].message }, { status: 400 });
     }
+
+    const { customerName, customerPhone, outletId, items } = validation.data;
 
     // Kurangi stok dan buat booking dalam satu transaksi
     const booking = await prisma.$transaction(async (tx) => {
-      // Kurangi stok
+      // Kurangi stok dengan atomic operation & check
       for (const item of items) {
-        await tx.stock.update({
-          where: { productId_outletId: { productId: item.productId, outletId: parseInt(outletId) } },
+        const updateResult = await tx.stock.updateMany({
+          where: {
+            productId: item.productId,
+            outletId: outletId,
+            stock: { gte: item.quantity },
+          },
           data: { stock: { decrement: item.quantity } },
         });
+
+        if (updateResult.count === 0) {
+          throw new Error(`Stok tidak cukup untuk produk ID ${item.productId}`);
+        }
       }
 
       // Buat booking
@@ -72,7 +97,7 @@ export async function POST(request) {
         data: {
           customerName,
           customerPhone,
-          outletId: parseInt(outletId),
+          outletId: outletId,
           status: 'PENDING',
           items: {
             create: items.map((item) => ({
@@ -91,6 +116,6 @@ export async function POST(request) {
     return NextResponse.json({ success: true, booking }, { status: 201 });
   } catch (error) {
     console.error('[BOOKINGS POST ERROR]', error);
-    return NextResponse.json({ error: 'Gagal membuat booking' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Gagal membuat booking' }, { status: 500 });
   }
 }

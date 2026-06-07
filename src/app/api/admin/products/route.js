@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { verifyJWT } from '@/lib/auth';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 export async function POST(request) {
   try {
@@ -11,13 +15,40 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
-    const { title, description, image, category, price, stock } = await request.json();
+    const formData = await request.formData();
+    const title = formData.get('title');
+    const description = formData.get('description');
+    const category = formData.get('category');
+    const price = formData.get('price');
+    const stock = formData.get('stock');
+    const imageFile = formData.get('image');
 
-    if (!title || !description || !category || !price || stock === undefined) {
+    if (!title || !description || !category || !price || stock === null) {
       return NextResponse.json({ error: 'Data produk tidak lengkap' }, { status: 400 });
     }
 
-    const session = JSON.parse(sessionCookie.value);
+    const session = await verifyJWT(sessionCookie.value);
+    if (!session) {
+      return NextResponse.json({ error: 'Sesi tidak valid' }, { status: 401 });
+    }
+
+    let imageHash = null;
+    if (imageFile && imageFile.name) {
+      const buffer = Buffer.from(await imageFile.arrayBuffer());
+      const ext = path.extname(imageFile.name) || '.jpg';
+      const hash = crypto.randomBytes(16).toString('hex') + ext;
+      const savePath = path.join(process.cwd(), 'storage', 'products', hash);
+      fs.writeFileSync(savePath, buffer);
+      imageHash = hash;
+    }
+
+    let defaultImage = '';
+    if (!imageHash) {
+      if (category === 'Croissant') defaultImage = 'default_croissant.png';
+      else if (category === 'Roti Tawar') defaultImage = 'default_roti_tawar.png';
+      else if (category === 'Donat') defaultImage = 'default_donat.png';
+      else if (category === 'Pastry') defaultImage = 'default_pastry.png';
+    }
 
     // Buat produk baru secara global, lalu buat stok untuk outlet admin
     const product = await prisma.$transaction(async (tx) => {
@@ -25,7 +56,7 @@ export async function POST(request) {
         data: {
           title,
           description,
-          image: image || '/images/default-bread.jpg',
+          image: imageHash || defaultImage,
           category,
         },
       });

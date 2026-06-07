@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { verifyJWT } from '@/lib/auth';
 
 // GET: Ambil semua stok untuk outlet admin yang login
 export async function GET() {
@@ -12,7 +13,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
-    const session = JSON.parse(sessionCookie.value);
+    const session = await verifyJWT(sessionCookie.value);
+    if (!session) return NextResponse.json({ error: 'Sesi tidak valid' }, { status: 401 });
 
     const stocks = await prisma.stock.findMany({
       where: { outletId: session.outletId },
@@ -42,7 +44,8 @@ export async function PATCH(request) {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
-    const session = JSON.parse(sessionCookie.value);
+    const session = await verifyJWT(sessionCookie.value);
+    if (!session) return NextResponse.json({ error: 'Sesi tidak valid' }, { status: 401 });
     const { productId, stock, price, promoText } = await request.json();
 
     if (!productId) {

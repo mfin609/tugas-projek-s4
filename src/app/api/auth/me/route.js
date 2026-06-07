@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { verifyJWT } from '@/lib/auth';
 
 export async function GET() {
   try {
@@ -10,7 +11,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
-    const session = JSON.parse(sessionCookie.value);
+    const session = await verifyJWT(sessionCookie.value);
+    if (!session) {
+      return NextResponse.json({ error: 'Sesi tidak valid' }, { status: 401 });
+    }
+    
     return NextResponse.json({ admin: session });
   } catch {
     return NextResponse.json({ error: 'Sesi tidak valid' }, { status: 401 });

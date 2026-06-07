@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { verifyJWT } from '@/lib/auth';
 
 export async function PATCH(request, context) {
   try {
@@ -11,7 +12,10 @@ export async function PATCH(request, context) {
       return NextResponse.json({ error: 'Tidak terautentikasi' }, { status: 401 });
     }
 
-    const session = JSON.parse(sessionCookie.value);
+    const session = await verifyJWT(sessionCookie.value);
+    if (!session) {
+      return NextResponse.json({ error: 'Sesi tidak valid' }, { status: 401 });
+    }
     const { status } = await request.json();
 
     // Next.js 16: params adalah Promise, harus di-await
@@ -22,7 +26,7 @@ export async function PATCH(request, context) {
       return NextResponse.json({ error: 'ID booking tidak valid' }, { status: 400 });
     }
 
-    if (!['APPROVED', 'REJECTED'].includes(status)) {
+    if (!['APPROVED', 'REJECTED', 'COMPLETED'].includes(status)) {
       return NextResponse.json({ error: 'Status tidak valid' }, { status: 400 });
     }
 
@@ -40,25 +44,32 @@ export async function PATCH(request, context) {
       return NextResponse.json({ error: 'Akses ditolak - booking bukan milik outlet Anda' }, { status: 403 });
     }
 
-    if (booking.status !== 'PENDING') {
-      return NextResponse.json({ error: 'Booking sudah diproses sebelumnya' }, { status: 400 });
-    }
-
-    // Jika REJECTED, kembalikan stok
-    if (status === 'REJECTED') {
-      await prisma.$transaction(async (tx) => {
-        for (const item of booking.items) {
-          await tx.stock.update({
-            where: {
-              productId_outletId: { productId: item.productId, outletId: booking.outletId },
-            },
-            data: { stock: { increment: item.quantity } },
-          });
-        }
-        await tx.booking.update({ where: { id: bookingId }, data: { status: 'REJECTED' } });
-      });
+    if (status === 'COMPLETED') {
+      if (booking.status !== 'APPROVED') {
+        return NextResponse.json({ error: 'Booking harus disetujui (APPROVED) terlebih dahulu' }, { status: 400 });
+      }
+      await prisma.booking.update({ where: { id: bookingId }, data: { status: 'COMPLETED' } });
     } else {
-      await prisma.booking.update({ where: { id: bookingId }, data: { status: 'APPROVED' } });
+      if (booking.status !== 'PENDING') {
+        return NextResponse.json({ error: 'Booking sudah diproses sebelumnya' }, { status: 400 });
+      }
+
+      // Jika REJECTED, kembalikan stok
+      if (status === 'REJECTED') {
+        await prisma.$transaction(async (tx) => {
+          for (const item of booking.items) {
+            await tx.stock.update({
+              where: {
+                productId_outletId: { productId: item.productId, outletId: booking.outletId },
+              },
+              data: { stock: { increment: item.quantity } },
+            });
+          }
+          await tx.booking.update({ where: { id: bookingId }, data: { status: 'REJECTED' } });
+        });
+      } else if (status === 'APPROVED') {
+        await prisma.booking.update({ where: { id: bookingId }, data: { status: 'APPROVED' } });
+      }
     }
 
     const updated = await prisma.booking.findUnique({

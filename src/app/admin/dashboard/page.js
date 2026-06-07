@@ -8,9 +8,10 @@ const formatRupiah = (n) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 
 const STATUS_LABEL = {
-  PENDING:  { label: "Menunggu",  cls: "status-pending" },
-  APPROVED: { label: "Disetujui", cls: "status-approved" },
-  REJECTED: { label: "Ditolak",   cls: "status-rejected" },
+  PENDING:   { label: "Menunggu Persetujuan",  cls: "status-pending text-warning fw-semibold" },
+  APPROVED:  { label: "Siap Diambil", cls: "status-approved text-primary fw-semibold" },
+  COMPLETED: { label: "Selesai (Telah Diambil)", cls: "status-completed text-success fw-bold" },
+  REJECTED:  { label: "Ditolak",   cls: "status-rejected text-danger fw-semibold" },
 };
 
 export default function AdminDashboardPage() {
@@ -29,7 +30,12 @@ export default function AdminDashboardPage() {
   const [editLoading, setEditLoading] = useState(false);
   const [editMsg, setEditMsg] = useState("");
 
-  const [newProduct, setNewProduct] = useState({ title: "", description: "", category: "", price: "", stock: "" });
+  const [editProductData, setEditProductData] = useState(null);
+  const [editProductForm, setEditProductForm] = useState({ title: "", description: "", category: "", image: null });
+  const [editProductLoading, setEditProductLoading] = useState(false);
+  const [editProductMsg, setEditProductMsg] = useState("");
+
+  const [newProduct, setNewProduct] = useState({ title: "", description: "", category: "", price: "", stock: "", image: null });
   const [addLoading, setAddLoading] = useState(false);
   const [addMsg, setAddMsg] = useState("");
 
@@ -91,6 +97,12 @@ export default function AdminDashboardPage() {
     setEditMsg("");
   };
 
+  const openEditProduct = (product) => {
+    setEditProductData(product);
+    setEditProductForm({ title: product.title, description: product.description, category: product.category, image: null });
+    setEditProductMsg("");
+  };
+
   const handleUpdateStock = async (e) => {
     e.preventDefault();
     setEditLoading(true);
@@ -99,7 +111,7 @@ export default function AdminDashboardPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        productId: editStock.productId,
+        productId: editStock?.productId,
         stock: editForm.stock,
         price: editForm.price,
         promoText: editForm.promoText,
@@ -116,20 +128,54 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleUpdateProduct = async (e) => {
+    e.preventDefault();
+    setEditProductLoading(true);
+    setEditProductMsg("");
+
+    const formData = new FormData();
+    formData.append("title", editProductForm.title);
+    formData.append("description", editProductForm.description);
+    formData.append("category", editProductForm.category);
+    if (editProductForm.image) formData.append("image", editProductForm.image);
+
+    const res = await fetch(`/api/admin/products/${editProductData?.id}`, {
+      method: "PUT",
+      body: formData,
+    });
+    const data = await res.json();
+    setEditProductLoading(false);
+    if (res.ok) {
+      setEditProductMsg("✅ Produk berhasil diperbarui!");
+      fetchStocks();
+      setTimeout(() => { setEditProductData(null); setEditProductMsg(""); }, 1200);
+    } else {
+      setEditProductMsg(`❌ ${data.error}`);
+    }
+  };
+
   const handleAddProduct = async (e) => {
     e.preventDefault();
     setAddLoading(true);
     setAddMsg("");
+
+    const formData = new FormData();
+    formData.append("title", newProduct.title);
+    formData.append("description", newProduct.description);
+    formData.append("category", newProduct.category);
+    formData.append("price", newProduct.price);
+    formData.append("stock", newProduct.stock);
+    if (newProduct.image) formData.append("image", newProduct.image);
+
     const res = await fetch("/api/admin/products", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newProduct),
+      body: formData,
     });
     const data = await res.json();
     setAddLoading(false);
     if (res.ok) {
       setAddMsg("✅ Produk berhasil ditambahkan!");
-      setNewProduct({ title: "", description: "", category: "", price: "", stock: "" });
+      setNewProduct({ title: "", description: "", category: "", price: "", stock: "", image: null });
       fetchStocks();
     } else {
       setAddMsg(`❌ ${data.error}`);
@@ -253,36 +299,51 @@ export default function AdminDashboardPage() {
         <div className="p-4">
           {/* ── STATS ROW ──────────────────────────────────────── */}
           <div className="row g-3 mb-4">
-            <div className="col-6 col-lg-3">
-              <div className="stat-card">
+            <div className="col-6 col-xl">
+              <div className="stat-card h-100">
                 <div className="d-flex align-items-center gap-3">
                   <div className="stat-icon" style={{ background: "rgba(245,158,11,0.12)" }}>
                     <span style={{ color: "#d97706" }}>⏳</span>
                   </div>
                   <div>
                     <div className="fw-bold" style={{ fontSize: "1.4rem" }}>{pendingCount}</div>
-                    <div className="text-muted small">Menunggu</div>
+                    <div className="text-muted small" style={{lineHeight: 1.2}}>Menunggu</div>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="col-6 col-lg-3">
-              <div className="stat-card">
+            <div className="col-6 col-xl">
+              <div className="stat-card h-100">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="stat-icon" style={{ background: "rgba(59,130,246,0.12)" }}>
+                    <span style={{ color: "#3b82f6" }}>📦</span>
+                  </div>
+                  <div>
+                    <div className="fw-bold" style={{ fontSize: "1.4rem" }}>
+                      {bookings.filter((b) => b.status === "APPROVED").length}
+                    </div>
+                    <div className="text-muted small" style={{lineHeight: 1.2}}>Siap Ambil</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="col-6 col-xl">
+              <div className="stat-card h-100">
                 <div className="d-flex align-items-center gap-3">
                   <div className="stat-icon" style={{ background: "rgba(34,197,94,0.12)" }}>
                     <span style={{ color: "#16a34a" }}>✅</span>
                   </div>
                   <div>
                     <div className="fw-bold" style={{ fontSize: "1.4rem" }}>
-                      {bookings.filter((b) => b.status === "APPROVED").length}
+                      {bookings.filter((b) => b.status === "COMPLETED").length}
                     </div>
-                    <div className="text-muted small">Disetujui</div>
+                    <div className="text-muted small" style={{lineHeight: 1.2}}>Selesai</div>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="col-6 col-lg-3">
-              <div className="stat-card">
+            <div className="col-6 col-xl">
+              <div className="stat-card h-100">
                 <div className="d-flex align-items-center gap-3">
                   <div className="stat-icon" style={{ background: "rgba(239,68,68,0.12)" }}>
                     <span style={{ color: "#b91c1c" }}>❌</span>
@@ -291,20 +352,20 @@ export default function AdminDashboardPage() {
                     <div className="fw-bold" style={{ fontSize: "1.4rem" }}>
                       {bookings.filter((b) => b.status === "REJECTED").length}
                     </div>
-                    <div className="text-muted small">Ditolak</div>
+                    <div className="text-muted small" style={{lineHeight: 1.2}}>Ditolak</div>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="col-6 col-lg-3">
-              <div className="stat-card">
+            <div className="col-12 col-xl">
+              <div className="stat-card h-100">
                 <div className="d-flex align-items-center gap-3">
                   <div className="stat-icon" style={{ background: "rgba(200,96,42,0.12)" }}>
-                    <span style={{ color: "var(--yuki-primary)" }}>📦</span>
+                    <span style={{ color: "var(--yuki-primary)" }}>🍞</span>
                   </div>
                   <div>
                     <div className="fw-bold" style={{ fontSize: "1.4rem" }}>{stocks.length}</div>
-                    <div className="text-muted small">Produk Aktif</div>
+                    <div className="text-muted small" style={{lineHeight: 1.2}}>Katalog Produk</div>
                   </div>
                 </div>
               </div>
@@ -386,6 +447,20 @@ export default function AdminDashboardPage() {
                                 </button>
                               </div>
                             )}
+                            {b.status === "APPROVED" && (
+                              <button
+                                id={`btn-complete-${b.id}`}
+                                className="btn btn-sm btn-primary w-100 mt-1"
+                                disabled={statusLoading === b.id}
+                                onClick={() => handleStatusUpdate(b.id, "COMPLETED")}
+                              >
+                                {statusLoading === b.id ? (
+                                  <span className="spinner-border spinner-border-sm" />
+                                ) : (
+                                  <><i className="bi bi-check-all me-1" />Tandai Selesai</>
+                                )}
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -436,13 +511,14 @@ export default function AdminDashboardPage() {
                           )}
                         </td>
                         <td>
-                          <button
-                            id={`btn-edit-stock-${s.id}`}
-                            className="btn btn-sm btn-yuki"
-                            onClick={() => openEditStock(s)}
-                          >
-                            <i className="bi bi-pencil me-1" />Edit
-                          </button>
+                          <div className="d-flex gap-2 justify-content-end">
+                            <button onClick={() => openEditProduct(s.product)} className="btn btn-sm btn-outline-yuki">
+                              <i className="bi bi-pencil-square me-1" />Edit Info
+                            </button>
+                            <button onClick={() => openEditStock(s)} className="btn btn-sm btn-yuki">
+                              <i className="bi bi-tags me-1" />Edit Stok
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -452,7 +528,17 @@ export default function AdminDashboardPage() {
 
               {/* Edit Stock Modal */}
               {editStock && (
-                <div className="modal fade show d-block" tabIndex={-1} id="modal-edit-stock" aria-modal="true" role="dialog">
+                <>
+                <div 
+                  className="modal fade show d-block" 
+                  tabIndex={-1} 
+                  id="modal-edit-stock" 
+                  aria-modal="true" 
+                  role="dialog"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) setEditStock(null);
+                  }}
+                >
                   <div className="modal-dialog modal-dialog-centered">
                     <div className="modal-content">
                       <div className="modal-header">
@@ -468,7 +554,7 @@ export default function AdminDashboardPage() {
                         />
                       </div>
                       <div className="modal-body p-4">
-                        <p className="fw-semibold mb-3">{editStock.product.title}</p>
+                        <p className="fw-semibold mb-3">{editStock?.product?.title}</p>
                         <form onSubmit={handleUpdateStock} id="form-edit-stock">
                           <div className="mb-3">
                             <label htmlFor="edit-stock-qty" className="form-label fw-semibold small">Jumlah Stok</label>
@@ -524,8 +610,9 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="modal-backdrop fade show" onClick={() => setEditStock(null)} />
                 </div>
+                <div className="modal-backdrop fade show" />
+                </>
               )}
             </div>
           )}
@@ -553,6 +640,20 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
                     required
                   />
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="new-image" className="form-label fw-semibold small">Foto Produk</label>
+                  <input
+                    id="new-image"
+                    type="file"
+                    accept="image/*"
+                    className="form-control"
+                    onChange={(e) => setNewProduct({ ...newProduct, image: e.target.files[0] })}
+                    required
+                  />
+                  <div className="form-text" style={{ fontSize: "0.75rem" }}>
+                    Pilih gambar beresolusi tinggi (JPG/PNG).
+                  </div>
                 </div>
                 <div className="mb-3">
                   <label htmlFor="new-desc" className="form-label fw-semibold small">Deskripsi Produk</label>
@@ -628,6 +729,106 @@ export default function AdminDashboardPage() {
               </form>
             </div>
           )}
+
+          {/* Edit Product Modal */}
+          {editProductData && (
+            <>
+            <div 
+              className="modal fade show d-block" 
+              tabIndex={-1} 
+              id="modal-edit-product" 
+              aria-modal="true" 
+              role="dialog"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setEditProductData(null);
+              }}
+            >
+              <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title fw-bold">
+                      <i className="bi bi-pencil-square me-2" />Edit Informasi Produk
+                    </h5>
+                    <button
+                      type="button"
+                      className="btn-close"
+                      onClick={() => setEditProductData(null)}
+                      id="btn-close-edit-product"
+                      aria-label="Tutup"
+                    />
+                  </div>
+                  <div className="modal-body p-4">
+                    <form onSubmit={handleUpdateProduct} id="form-edit-product">
+                      <div className="mb-3">
+                        <label htmlFor="edit-prod-title" className="form-label fw-semibold small">Nama Produk</label>
+                        <input
+                          id="edit-prod-title"
+                          type="text"
+                          className="form-control"
+                          value={editProductForm.title}
+                          onChange={(e) => setEditProductForm({ ...editProductForm, title: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label htmlFor="edit-prod-desc" className="form-label fw-semibold small">Deskripsi</label>
+                        <textarea
+                          id="edit-prod-desc"
+                          className="form-control"
+                          rows={3}
+                          value={editProductForm.description}
+                          onChange={(e) => setEditProductForm({ ...editProductForm, description: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label htmlFor="edit-prod-cat" className="form-label fw-semibold small">Kategori</label>
+                        <select
+                          id="edit-prod-cat"
+                          className="form-select"
+                          value={editProductForm.category}
+                          onChange={(e) => setEditProductForm({ ...editProductForm, category: e.target.value })}
+                          required
+                        >
+                          <option value="Roti Tawar">Roti Tawar</option>
+                          <option value="Croissant">Croissant</option>
+                          <option value="Pastry">Pastry</option>
+                          <option value="Donat">Donat</option>
+                          <option value="Lainnya">Lainnya</option>
+                        </select>
+                      </div>
+                      <div className="mb-3">
+                        <label htmlFor="edit-prod-image" className="form-label fw-semibold small">Foto Produk (Kosongkan jika tidak ingin diubah)</label>
+                        <input
+                          id="edit-prod-image"
+                          type="file"
+                          accept="image/*"
+                          className="form-control"
+                          onChange={(e) => setEditProductForm({ ...editProductForm, image: e.target.files[0] })}
+                        />
+                      </div>
+                      {editProductMsg && (
+                        <div className={`alert small py-2 ${editProductMsg.startsWith("✅") ? "alert-success" : "alert-danger"}`} id="edit-prod-msg">
+                          {editProductMsg}
+                        </div>
+                      )}
+                      <div className="d-flex justify-content-end gap-2 mt-4">
+                        <button type="button" className="btn btn-light" onClick={() => setEditProductData(null)}>
+                          Batal
+                        </button>
+                        <button type="submit" id="btn-save-prod" className="btn btn-yuki" disabled={editProductLoading}>
+                          {editProductLoading ? <span className="spinner-border spinner-border-sm" /> : <><i className="bi bi-save me-1" />Simpan</>}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-backdrop fade show" />
+            </>
+          )}
+
         </div>
       </main>
     </div>

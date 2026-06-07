@@ -2,9 +2,24 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
+import { signJWT } from '@/lib/auth';
+import rateLimit from '@/lib/rate-limit';
+
+const limiter = rateLimit({
+  interval: 60 * 1000, // 60 seconds
+  uniqueTokenPerInterval: 500, // Max 500 users per second
+});
 
 export async function POST(request) {
   try {
+    // Apply rate limiting (max 30 requests per minute per IP)
+    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    try {
+      await limiter.check(30, ip);
+    } catch {
+      return NextResponse.json({ error: 'Terlalu banyak percobaan login, silakan coba lagi nanti' }, { status: 429 });
+    }
+
     const { username, password } = await request.json();
 
     if (!username || !password) {
@@ -25,16 +40,17 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Username atau password salah' }, { status: 401 });
     }
 
-    // Simpan sesi sebagai cookie sederhana (JSON encoded)
-    const sessionData = JSON.stringify({
+    // Sign JWT Token
+    const payload = {
       adminId: admin.id,
       adminName: admin.name,
       outletId: admin.outletId,
       outletName: admin.outlet.name,
-    });
+    };
+    const token = await signJWT(payload);
 
     const cookieStore = await cookies();
-    cookieStore.set('admin_session', sessionData, {
+    cookieStore.set('admin_session', token, {
       httpOnly: true,
       path: '/',
       maxAge: 60 * 60 * 8, // 8 jam
@@ -43,12 +59,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      admin: {
-        id: admin.id,
-        name: admin.name,
-        outletId: admin.outletId,
-        outletName: admin.outlet.name,
-      },
+      admin: payload,
     });
   } catch (error) {
     console.error('[AUTH LOGIN ERROR]', error);
