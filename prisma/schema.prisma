@@ -1,0 +1,69 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Outlet {
+  id        Int       @id @default(autoincrement())
+  name      String
+  location  String
+  admins    Admin[]
+  stocks    Stock[]
+  bookings  Booking[]
+}
+
+model Admin {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  name      String
+  outletId  Int
+  outlet    Outlet   @relation(fields: [outletId], references: [id], onDelete: Cascade)
+}
+
+model Product {
+  id           Int           @id @default(autoincrement())
+  title        String        @unique
+  description  String        @db.Text
+  image        String
+  category     String
+  stocks       Stock[]
+  bookingItems BookingItem[]
+}
+
+model Stock {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  outletId  Int
+  stock     Int      @default(0)
+  price     Decimal  @db.Decimal(10, 2)
+  promoText String?
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  outlet    Outlet   @relation(fields: [outletId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, outletId])
+}
+
+model Booking {
+  id            Int           @id @default(autoincrement())
+  customerName  String
+  customerPhone String
+  outletId      Int
+  outlet        Outlet        @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  status        String        @default("PENDING")
+  createdAt     DateTime      @default(now())
+  items         BookingItem[]
+}
+
+model BookingItem {
+  id        Int     @id @default(autoincrement())
+  bookingId Int
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int
+}

@@ -1,492 +1,726 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import Image from "next/image";
+import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+
+const formatRupiah = (n) =>
+  new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
+
+const BREAD_EMOJIS = {
+  Croissant: "🥐",
+  "Roti Tawar": "🍞",
+  Donat: "🍩",
+  Pastry: "🧁",
+};
 
 export default function Home() {
-  // Initial tasks data
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      title: "Implementasi CRUD Database Lanjut (PostgreSQL)",
-      category: "Tugas Mandiri",
-      priority: "high",
-      deadline: "2026-06-10",
-      completed: true,
-    },
-    {
-      id: 2,
-      title: "Rancang UI Mockup Figma Dashboard & Landing Page",
-      category: "Tugas Kelompok",
-      priority: "medium",
-      deadline: "2026-06-15",
-      completed: false,
-    },
-    {
-      id: 3,
-      title: "Laporan Analisis Kebutuhan Sistem & Arsitektur Cloud",
-      category: "Tugas Mandiri",
-      priority: "low",
-      deadline: "2026-06-20",
-      completed: false,
-    },
-    {
-      id: 4,
-      title: "Integrasi API Payment Gateway & Pengujian Unit",
-      category: "Tugas Kelompok",
-      priority: "high",
-      deadline: "2026-06-25",
-      completed: false,
-    },
-  ]);
+  const [products, setProducts] = useState([]);
+  const [outlets, setOutlets] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Form states
-  const [newTitle, setNewTitle] = useState("");
-  const [newCategory, setNewCategory] = useState("Tugas Mandiri");
-  const [newPriority, setNewPriority] = useState("medium");
-  const [newDeadline, setNewDeadline] = useState("");
-
-  // Filter and Search states
+  // Filter states
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all"); // all, pending, ongoing, completed, high-priority
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [outletFilter, setOutletFilter] = useState("all");
 
-  // Handle task completion toggle
-  const toggleTask = (id) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
+  // Cart
+  const [cart, setCart] = useState([]); // [{product, outletId, outletName, price, stock, quantity}]
+  const [selectedOutlet, setSelectedOutlet] = useState("all");
+
+  // Modal booking
+  const [showCart, setShowCart] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [orderForm, setOrderForm] = useState({ name: "", phone: "" });
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(null);
+  const [orderError, setOrderError] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/products").then((r) => r.json()),
+      fetch("/api/outlets").then((r) => r.json()),
+    ]).then(([pd, od]) => {
+      setProducts(pd.products || []);
+      setOutlets(od.outlets || []);
+      setLoading(false);
+    });
+  }, []);
+
+  const categories = useMemo(() => {
+    const cats = [...new Set(products.map((p) => p.category))];
+    return cats;
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchCategory = categoryFilter === "all" || p.category === categoryFilter;
+      const matchOutlet =
+        outletFilter === "all" || p.stocks.some((s) => s.outletId === parseInt(outletFilter));
+      return matchSearch && matchCategory && matchOutlet;
+    });
+  }, [products, searchQuery, categoryFilter, outletFilter]);
+
+  // Harga minimum dari semua outlet
+  const minPrice = (p) => {
+    const prices = p.stocks.map((s) => s.price);
+    return prices.length > 0 ? Math.min(...prices) : 0;
+  };
+
+  const hasPromo = (p) => p.stocks.some((s) => s.promoText);
+
+  // Add to cart
+  const addToCart = (product, stockEntry) => {
+    setCart((prev) => {
+      const key = `${product.id}-${stockEntry.outletId}`;
+      const existing = prev.find((c) => c.key === key);
+      if (existing) {
+        if (existing.quantity >= stockEntry.stock) return prev;
+        return prev.map((c) =>
+          c.key === key ? { ...c, quantity: c.quantity + 1 } : c
+        );
+      }
+      return [
+        ...prev,
+        {
+          key,
+          product,
+          outletId: stockEntry.outletId,
+          outletName: stockEntry.outlet.name,
+          price: stockEntry.price,
+          stock: stockEntry.stock,
+          quantity: 1,
+        },
+      ];
+    });
+  };
+
+  const removeFromCart = (key) => setCart((p) => p.filter((c) => c.key !== key));
+
+  const updateQty = (key, delta) => {
+    setCart((prev) =>
+      prev
+        .map((c) => (c.key === key ? { ...c, quantity: c.quantity + delta } : c))
+        .filter((c) => c.quantity > 0)
     );
   };
 
-  // Handle task deletion
-  const deleteTask = (id) => {
-    setTasks(tasks.filter((task) => task.id !== id));
-  };
+  const cartTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+  const cartCount = cart.reduce((s, c) => s + c.quantity, 0);
 
-  // Handle new task submission
-  const handleAddTask = (e) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-
-    const newTask = {
-      id: Date.now(),
-      title: newTitle,
-      category: newCategory,
-      priority: newPriority,
-      deadline: newDeadline || new Date().toISOString().split("T")[0],
-      completed: false,
-    };
-
-    setTasks([newTask, ...tasks]);
-    setNewTitle("");
-    setNewDeadline("");
-  };
-
-  // Filter tasks based on search query and status filter
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      const matchesSearch = task.title
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-
-      if (!matchesSearch) return false;
-
-      switch (statusFilter) {
-        case "pending":
-          return !task.completed && new Date(task.deadline) > new Date();
-        case "ongoing":
-          return !task.completed;
-        case "completed":
-          return task.completed;
-        case "high-priority":
-          return task.priority === "high";
-        default:
-          return true;
-      }
+  // Cart outlet groups
+  const cartByOutlet = useMemo(() => {
+    const groups = {};
+    cart.forEach((c) => {
+      if (!groups[c.outletId]) groups[c.outletId] = { outletName: c.outletName, items: [] };
+      groups[c.outletId].items.push(c);
     });
-  }, [tasks, searchQuery, statusFilter]);
+    return Object.entries(groups);
+  }, [cart]);
 
-  // Statistics
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.completed).length;
-  const ongoingTasks = tasks.filter((t) => !t.completed).length;
-  const highPriorityTasks = tasks.filter((t) => t.priority === "high" && !t.completed).length;
+  // Submit booking per outlet
+  const handleOrder = async () => {
+    if (!orderForm.name || !orderForm.phone) {
+      setOrderError("Nama dan nomor telepon wajib diisi.");
+      return;
+    }
+    setOrderLoading(true);
+    setOrderError("");
+    const results = [];
 
-  const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    for (const [outletId, group] of cartByOutlet) {
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: orderForm.name,
+          customerPhone: orderForm.phone,
+          outletId: parseInt(outletId),
+          items: group.items.map((c) => ({ productId: c.product.id, quantity: c.quantity })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOrderError(data.error || "Gagal membuat pesanan.");
+        setOrderLoading(false);
+        return;
+      }
+      results.push({ outletName: group.outletName, bookingId: data.booking.id });
+    }
+
+    setOrderSuccess(results);
+    setCart([]);
+    setOrderLoading(false);
+  };
 
   return (
     <>
-      {/* Sticky Navbar */}
-      <nav className="navbar navbar-expand-lg navbar-light sticky-top glass-navbar py-3">
+      {/* ── NAVBAR ─────────────────────────────────────────────── */}
+      <nav className="yuki-navbar navbar navbar-expand-lg" id="navbar-main">
         <div className="container">
-          <a className="navbar-brand d-flex align-items-center fw-bold text-dark fs-4" href="#">
-            <span className="p-2 bg-gradient-primary-yuki rounded-3 me-2 d-inline-flex align-items-center justify-content-center text-white" style={{ width: "38px", height: "38px" }}>
-              <i className="bi bi-stack"></i>
-            </span>
-            Yuki kunn <span className="text-primary fw-semibold ms-1">TaskFlow</span>
-          </a>
-          <div className="d-flex align-items-center gap-3">
-            <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill d-none d-md-inline-block">
-              <i className="bi bi-bookmark-star-fill me-1"></i> Projek Semester 4
-            </span>
-            <div className="d-flex align-items-center gap-2">
-              <div className="text-end d-none d-sm-block">
-                <div className="fw-semibold small">Yuki AMD</div>
-                <div className="text-muted extra-small" style={{ fontSize: "0.75rem" }}>Administrator</div>
-              </div>
-              <div className="rounded-circle bg-gradient-primary-yuki text-white d-flex align-items-center justify-content-center fw-bold shadow-sm" style={{ width: "40px", height: "40px" }}>
-                YA
-              </div>
+          <Link className="navbar-brand" href="/" id="brand-logo">
+            🍞 Toko Roti <span>Yuki</span>
+          </Link>
+          <button
+            className="navbar-toggler border-0"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navMain"
+            aria-controls="navMain"
+            aria-expanded="false"
+            aria-label="Toggle navigation"
+          >
+            <i className="bi bi-list text-white fs-3" />
+          </button>
+
+          <div className="collapse navbar-collapse" id="navMain">
+            <ul className="navbar-nav me-auto ms-3 gap-1">
+              <li className="nav-item">
+                <a className="nav-link" href="#produk">Produk</a>
+              </li>
+              <li className="nav-item">
+                <a className="nav-link" href="#outlets">Outlet</a>
+              </li>
+            </ul>
+
+            <div className="d-flex align-items-center gap-3">
+              <button
+                id="btn-cart"
+                className="btn btn-yuki position-relative"
+                onClick={() => setShowCart(true)}
+              >
+                <i className="bi bi-basket2-fill me-2" />
+                Keranjang
+                {cartCount > 0 && (
+                  <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
+              <Link href="/admin/login" className="btn btn-yuki-outline" id="btn-admin-login">
+                <i className="bi bi-person-lock me-2" />Admin
+              </Link>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Main Body Wrapper */}
-      <div className="container py-5 flex-grow-1">
-
-        {/* Welcome & Overview Row */}
-        <div className="row mb-5 align-items-center fade-in-up">
-          <div className="col-lg-7 mb-4 mb-lg-0">
-            <h1 className="fw-bold tracking-tight text-dark mb-2">
-              Selamat Datang di <span className="text-primary">Yuki TaskFlow</span> 👋
-            </h1>
-            <p className="text-muted fs-5 mb-0">
-              Kelola tugas, jadwal, dan progres pengerjaan projek semester 4 Anda dengan efisien.
-            </p>
-          </div>
-
-          {/* Global Completion Progress Card */}
-          <div className="col-lg-5">
-            <div className="glass-card p-4">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <span className="fw-semibold text-muted">Progres Keseluruhan Projek</span>
-                <span className="fw-bold text-primary">{completionPercentage}%</span>
+      {/* ── HERO SECTION ───────────────────────────────────────── */}
+      <section className="hero-section" id="hero">
+        <div className="container position-relative" style={{ zIndex: 1 }}>
+          <div className="row align-items-center">
+            <div className="col-lg-6 mb-5 mb-lg-0">
+              <div className="hero-badge fade-up">
+                <i className="bi bi-star-fill" /> Roti Artisan Premium Jakarta
               </div>
-              <div className="progress rounded-pill mb-2" style={{ height: "12px" }}>
+              <h1 className="hero-title fade-up fade-up-delay-1">
+                Roti Fresh,<br />
+                <span className="highlight">Dibuat dengan Cinta</span>
+              </h1>
+              <p className="hero-subtitle fade-up fade-up-delay-2">
+                Nikmati roti artisan berkualitas tinggi dari Toko Roti Yuki.
+                Dibuat fresh setiap hari dengan bahan pilihan, tersedia di
+                berbagai outlet terdekat.
+              </p>
+              <div className="d-flex gap-3 flex-wrap fade-up fade-up-delay-2">
+                <a href="#produk" className="btn btn-yuki btn-lg" id="btn-pesan-sekarang">
+                  <i className="bi bi-bag-heart-fill me-2" />Pesan Sekarang
+                </a>
+                <a href="#outlets" className="btn btn-yuki-outline btn-lg" id="btn-lihat-outlet">
+                  <i className="bi bi-shop me-2" />Lihat Outlet
+                </a>
+              </div>
+              <div className="hero-stats fade-up fade-up-delay-3">
+                <div className="hero-stat-item">
+                  <strong>{outlets.length}<span>+</span></strong>
+                  Outlet Aktif
+                </div>
+                <div className="hero-stat-item">
+                  <strong>{products.length}<span>+</span></strong>
+                  Jenis Roti
+                </div>
+                <div className="hero-stat-item">
+                  <strong>100<span>%</span></strong>
+                  Fresh Daily
+                </div>
+              </div>
+            </div>
+            <div className="col-lg-6">
+              <div className="hero-img-wrap fade-up fade-up-delay-2">
                 <div
-                  className="progress-bar bg-gradient-primary-yuki progress-bar-striped progress-bar-animated"
-                  role="progressbar"
-                  style={{ width: `${completionPercentage}%` }}
-                  aria-valuenow={completionPercentage}
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                ></div>
-              </div>
-              <small className="text-muted d-block">
-                <i className="bi bi-info-circle me-1"></i> {completedTasks} dari {totalTasks} tugas telah diselesaikan dengan baik
-              </small>
-            </div>
-          </div>
-        </div>
-
-        {/* Dashboard KPI Grid */}
-        <div className="row g-4 mb-5 fade-in-up delay-1">
-          {/* Card Total */}
-          <div className="col-sm-6 col-lg-3">
-            <div className="glass-card p-4 d-flex align-items-center justify-content-between">
-              <div>
-                <span className="text-muted d-block mb-1 fw-semibold">Total Tugas</span>
-                <h2 className="fw-bold mb-0 text-dark">{totalTasks}</h2>
-              </div>
-              <div className="p-3 bg-primary bg-opacity-10 text-primary rounded-4 fs-3 d-inline-flex">
-                <i className="bi bi-collection-fill"></i>
-              </div>
-            </div>
-          </div>
-          {/* Card Ongoing */}
-          <div className="col-sm-6 col-lg-3">
-            <div className="glass-card p-4 d-flex align-items-center justify-content-between">
-              <div>
-                <span className="text-muted d-block mb-1 fw-semibold">Sedang Berjalan</span>
-                <h2 className="fw-bold mb-0 text-warning">{ongoingTasks}</h2>
-              </div>
-              <div className="p-3 bg-warning bg-opacity-10 text-warning rounded-4 fs-3 d-inline-flex">
-                <i className="bi bi-clock-history"></i>
-              </div>
-            </div>
-          </div>
-          {/* Card Completed */}
-          <div className="col-sm-6 col-lg-3">
-            <div className="glass-card p-4 d-flex align-items-center justify-content-between">
-              <div>
-                <span className="text-muted d-block mb-1 fw-semibold">Tugas Selesai</span>
-                <h2 className="fw-bold mb-0 text-success">{completedTasks}</h2>
-              </div>
-              <div className="p-3 bg-success bg-opacity-10 text-success rounded-4 fs-3 d-inline-flex">
-                <i className="bi bi-check-circle-fill"></i>
-              </div>
-            </div>
-          </div>
-          {/* Card High Priority */}
-          <div className="col-sm-6 col-lg-3">
-            <div className="glass-card p-4 d-flex align-items-center justify-content-between">
-              <div>
-                <span className="text-muted d-block mb-1 fw-semibold">Prioritas Tinggi</span>
-                <h2 className="fw-bold mb-0 text-danger">{highPriorityTasks}</h2>
-              </div>
-              <div className="p-3 bg-danger bg-opacity-10 text-danger rounded-4 fs-3 d-inline-flex">
-                <i className="bi bi-exclamation-triangle-fill"></i>
+                  style={{
+                    background: "linear-gradient(135deg, rgba(200,96,42,0.2), rgba(232,168,56,0.15))",
+                    borderRadius: "24px",
+                    height: "420px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "120px",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }}
+                >
+                  🥖
+                </div>
+                <div className="hero-float-badge top-left">
+                  <i className="bi bi-clock me-2 text-warning" />Fresh dipanggang hari ini
+                </div>
+                <div className="hero-float-badge bottom-right">
+                  <i className="bi bi-shield-check me-2 text-success" />Tanpa pengawet buatan
+                </div>
               </div>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Dashboard Work Area */}
-        <div className="row g-4 fade-in-up delay-2">
-          {/* Left Side: Add Task Form & Filters */}
-          <div className="col-lg-4">
-            {/* Filter Card */}
-            <div className="glass-card p-4 mb-4">
-              <h5 className="fw-bold text-dark mb-3">
-                <i className="bi bi-funnel-fill text-primary me-2"></i>Filter & Pencarian
-              </h5>
+      {/* ── FILTER + PRODUK ─────────────────────────────────────── */}
+      <section className="section-wrap bg-white" id="produk">
+        <div className="container">
+          <div className="text-center mb-4">
+            <h2 className="section-title">Menu Roti Kami</h2>
+            <p className="section-subtitle">Pilih roti favorit Anda, tersedia di outlet terdekat</p>
+          </div>
 
-              {/* Search input */}
-              <div className="input-group mb-3">
-                <span className="input-group-text bg-white border-end-0 text-muted">
-                  <i className="bi bi-search"></i>
-                </span>
+          {/* Filter Bar */}
+          <div className="filter-bar" id="filter-bar">
+            <div className="row g-3 align-items-end">
+              <div className="col-lg-4">
+                <label className="form-label fw-semibold small text-muted mb-1">
+                  <i className="bi bi-search me-1" />Cari Roti
+                </label>
                 <input
+                  id="input-search"
                   type="text"
-                  className="form-control border-start-0 ps-0"
-                  placeholder="Cari tugas..."
+                  className="form-control"
+                  placeholder="Nama roti..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-
-              {/* Status Filters Stack */}
-              <div className="d-flex flex-column gap-2">
-                <button
-                  onClick={() => setStatusFilter("all")}
-                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${statusFilter === "all" ? "bg-primary text-white" : "btn-light text-dark"
-                    }`}
+              <div className="col-lg-4">
+                <label className="form-label fw-semibold small text-muted mb-1">
+                  <i className="bi bi-shop me-1" />Filter Outlet
+                </label>
+                <select
+                  id="select-outlet-filter"
+                  className="form-select"
+                  value={outletFilter}
+                  onChange={(e) => setOutletFilter(e.target.value)}
                 >
-                  <span><i className="bi bi-grid-fill me-2"></i>Semua Tugas</span>
-                  <span className={`badge ${statusFilter === "all" ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-muted"}`}>{tasks.length}</span>
-                </button>
-                <button
-                  onClick={() => setStatusFilter("ongoing")}
-                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${statusFilter === "ongoing" ? "bg-primary text-white" : "btn-light text-dark"
-                    }`}
-                >
-                  <span><i className="bi bi-circle me-2"></i>Belum Selesai</span>
-                  <span className={`badge ${statusFilter === "ongoing" ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-muted"}`}>{ongoingTasks}</span>
-                </button>
-                <button
-                  onClick={() => setStatusFilter("completed")}
-                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${statusFilter === "completed" ? "bg-primary text-white" : "btn-light text-dark"
-                    }`}
-                >
-                  <span><i className="bi bi-check-circle me-2"></i>Selesai</span>
-                  <span className={`badge ${statusFilter === "completed" ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-muted"}`}>{completedTasks}</span>
-                </button>
-                <button
-                  onClick={() => setStatusFilter("high-priority")}
-                  className={`btn text-start d-flex align-items-center justify-content-between py-2 px-3 rounded-3 ${statusFilter === "high-priority" ? "bg-primary text-white" : "btn-light text-dark"
-                    }`}
-                >
-                  <span><i className="bi bi-exclamation-octagon me-2"></i>Prioritas Tinggi</span>
-                  <span className={`badge ${statusFilter === "high-priority" ? "bg-white text-primary" : "bg-secondary bg-opacity-10 text-muted"}`}>{tasks.filter(t => t.priority === "high").length}</span>
-                </button>
+                  <option value="all">Semua Outlet</option>
+                  {outlets.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
               </div>
-            </div>
-
-            {/* Quick Add Form Card */}
-            <div className="glass-card p-4">
-              <h5 className="fw-bold text-dark mb-3">
-                <i className="bi bi-plus-circle-fill text-primary me-2"></i>Tambah Tugas Baru
-              </h5>
-              <form onSubmit={handleAddTask}>
-                {/* Title */}
-                <div className="mb-3">
-                  <label className="form-label small fw-semibold text-muted">Judul Tugas</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Masukkan nama tugas..."
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    required
-                  />
-                </div>
-
-                {/* Category */}
-                <div className="mb-3">
-                  <label className="form-label small fw-semibold text-muted">Kategori</label>
-                  <select
-                    className="form-select"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
+              <div className="col-lg-4">
+                <label className="form-label fw-semibold small text-muted mb-1">
+                  <i className="bi bi-tag me-1" />Kategori
+                </label>
+                <div className="d-flex flex-wrap gap-2">
+                  <button
+                    id="chip-all"
+                    className={`filter-chip ${categoryFilter === "all" ? "active" : ""}`}
+                    onClick={() => setCategoryFilter("all")}
                   >
-                    <option value="Tugas Mandiri">Tugas Mandiri</option>
-                    <option value="Tugas Kelompok">Tugas Kelompok</option>
-                    <option value="Ujian/Kuis">Ujian/Kuis</option>
-                  </select>
+                    Semua
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      id={`chip-${cat}`}
+                      className={`filter-chip ${categoryFilter === cat ? "active" : ""}`}
+                      onClick={() => setCategoryFilter(cat)}
+                    >
+                      {BREAD_EMOJIS[cat] || "🍞"} {cat}
+                    </button>
+                  ))}
                 </div>
-
-                {/* Priority */}
-                <div className="mb-3">
-                  <label className="form-label small fw-semibold text-muted">Prioritas</label>
-                  <div className="d-flex gap-2">
-                    <input
-                      type="radio"
-                      className="btn-check"
-                      name="priority"
-                      id="prio-low"
-                      value="low"
-                      checked={newPriority === "low"}
-                      onChange={() => setNewPriority("low")}
-                    />
-                    <label className="btn btn-outline-success btn-sm flex-fill" htmlFor="prio-low">Rendah</label>
-
-                    <input
-                      type="radio"
-                      className="btn-check"
-                      name="priority"
-                      id="prio-med"
-                      value="medium"
-                      checked={newPriority === "medium"}
-                      onChange={() => setNewPriority("medium")}
-                    />
-                    <label className="btn btn-outline-warning btn-sm flex-fill" htmlFor="prio-med">Sedang</label>
-
-                    <input
-                      type="radio"
-                      className="btn-check"
-                      name="priority"
-                      id="prio-high"
-                      value="high"
-                      checked={newPriority === "high"}
-                      onChange={() => setNewPriority("high")}
-                    />
-                    <label className="btn btn-outline-danger btn-sm flex-fill" htmlFor="prio-high">Tinggi</label>
-                  </div>
-                </div>
-
-                {/* Deadline */}
-                <div className="mb-4">
-                  <label className="form-label small fw-semibold text-muted">Tenggat Waktu</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={newDeadline}
-                    onChange={(e) => setNewDeadline(e.target.value)}
-                  />
-                </div>
-
-                {/* Submit button */}
-                <button type="submit" className="btn btn-primary bg-gradient-primary-yuki border-0 w-full py-2.5 glow-btn rounded-3">
-                  <i className="bi bi-plus-lg me-2"></i>Tambahkan Tugas
-                </button>
-              </form>
+              </div>
             </div>
           </div>
 
-          {/* Right Side: Task Items Listing */}
-          <div className="col-lg-8">
-            <div className="glass-card p-4 h-100 d-flex flex-column">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h5 className="fw-bold text-dark mb-0">
-                  <i className="bi bi-list-task text-primary me-2"></i>Daftar Tugas
-                </h5>
-                <span className="badge bg-secondary bg-opacity-10 text-muted py-2 px-3 rounded-pill fw-semibold">
-                  Menampilkan {filteredTasks.length} dari {tasks.length} Tugas
-                </span>
-              </div>
+          {/* Product Grid */}
+          {loading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-warning" style={{ width: "3rem", height: "3rem" }} />
+              <p className="mt-3 text-muted">Memuat produk...</p>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center py-5">
+              <div style={{ fontSize: "5rem" }}>🔍</div>
+              <h5 className="fw-bold mt-3">Produk tidak ditemukan</h5>
+              <p className="text-muted">Coba ubah filter atau kata kunci pencarian.</p>
+            </div>
+          ) : (
+            <div className="row g-4">
+              {filteredProducts.map((product) => (
+                <div key={product.id} className="col-sm-6 col-lg-4 col-xl-3">
+                  <ProductCard
+                    product={product}
+                    onAddToCart={addToCart}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
-              {/* Tasks List */}
-              <div className="d-flex flex-column gap-3 flex-grow-1">
-                {filteredTasks.length === 0 ? (
-                  <div className="text-center py-5 my-auto">
-                    <div className="text-muted fs-2 mb-3">
-                      <i className="bi bi-inbox-fill"></i>
-                    </div>
-                    <h6 className="fw-bold text-muted">Tidak ada tugas ditemukan</h6>
-                    <p className="text-muted small mb-0">Coba ubah filter atau tambahkan tugas baru di sebelah kiri.</p>
+      {/* ── OUTLETS SECTION ─────────────────────────────────────── */}
+      <section className="section-wrap" id="outlets" style={{ background: "var(--yuki-cream)" }}>
+        <div className="container">
+          <div className="text-center mb-5">
+            <h2 className="section-title">Outlet Kami</h2>
+            <p className="section-subtitle">Kunjungi outlet terdekat untuk menikmati roti fresh kami</p>
+          </div>
+          <div className="row g-4 justify-content-center">
+            {outlets.map((outlet, i) => (
+              <div key={outlet.id} className="col-md-4">
+                <div className="admin-card text-center h-100" style={{ border: "1px solid #f0e8e0" }}>
+                  <div
+                    className="mx-auto mb-3 d-flex align-items-center justify-content-center"
+                    style={{
+                      width: 64, height: 64, borderRadius: "16px",
+                      background: "linear-gradient(135deg, #c8602a, #e8a838)",
+                      fontSize: "2rem",
+                    }}
+                  >
+                    🏪
                   </div>
-                ) : (
-                  filteredTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className={`task-item priority-${task.priority} ${task.completed ? "completed" : ""
-                        } p-3 bg-white border border-light-subtle rounded-3 shadow-sm d-flex align-items-center justify-content-between`}
-                    >
-                      <div className="d-flex align-items-center gap-3">
-                        <input
-                          type="checkbox"
-                          className="form-check-input task-checkbox border-2 m-0"
-                          checked={task.completed}
-                          onChange={() => toggleTask(task.id)}
-                        />
-                        <div>
-                          <h6 className="mb-1 fw-bold text-dark tracking-tight">{task.title}</h6>
-                          <div className="d-flex flex-wrap align-items-center gap-2">
-                            <span className="badge bg-secondary bg-opacity-10 text-muted px-2 py-1 rounded-2 fw-medium small">
-                              {task.category}
-                            </span>
-                            <span className="text-muted small d-flex align-items-center gap-1">
-                              <i className="bi bi-calendar-event"></i>
-                              Deadline: {new Date(task.deadline).toLocaleDateString("id-ID", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </span>
+                  <h5 className="fw-bold">{outlet.name}</h5>
+                  <p className="text-muted small mb-0">
+                    <i className="bi bi-geo-alt me-1 text-danger" />
+                    {outlet.location}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ──────────────────────────────────────────────── */}
+      <footer className="yuki-footer" id="footer">
+        <div className="container">
+          <div className="row g-4">
+            <div className="col-lg-4 mb-4 mb-lg-0">
+              <h4 className="text-white fw-bold mb-3">🍞 Toko Roti Yuki</h4>
+              <p className="small" style={{ color: "rgba(255,255,255,0.65)", lineHeight: 1.7 }}>
+                Menyajikan roti artisan premium yang dibuat dengan cinta setiap harinya.
+                Menggunakan bahan-bahan alami pilihan tanpa pengawet buatan.
+              </p>
+            </div>
+            <div className="col-lg-2 col-6">
+              <h5 className="text-white fw-semibold mb-3" style={{ fontSize: "0.95rem" }}>Menu</h5>
+              <ul className="list-unstyled small">
+                <li className="mb-2"><a href="#produk">Semua Produk</a></li>
+                <li className="mb-2"><a href="#outlets">Outlet</a></li>
+              </ul>
+            </div>
+            <div className="col-lg-3 col-6">
+              <h5 className="text-white fw-semibold mb-3" style={{ fontSize: "0.95rem" }}>Admin</h5>
+              <ul className="list-unstyled small">
+                <li className="mb-2"><Link href="/admin/login">Login Admin</Link></li>
+                <li className="mb-2"><Link href="/admin/dashboard">Dashboard</Link></li>
+              </ul>
+            </div>
+            <div className="col-lg-3">
+              <h5 className="text-white fw-semibold mb-3" style={{ fontSize: "0.95rem" }}>Kontak</h5>
+              <ul className="list-unstyled small">
+                <li className="mb-2"><i className="bi bi-telephone me-2" />+62 21 1234 5678</li>
+                <li className="mb-2"><i className="bi bi-envelope me-2" />hello@tokoroti-yuki.id</li>
+                <li className="mb-2"><i className="bi bi-instagram me-2" />@tokoroti.yuki</li>
+              </ul>
+            </div>
+          </div>
+          <hr className="footer-divider" />
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <p className="small mb-0" style={{ color: "rgba(255,255,255,0.5)" }}>
+              &copy; 2025 Toko Roti Yuki. Semua hak dilindungi.
+            </p>
+            <p className="small mb-0" style={{ color: "rgba(255,255,255,0.5)" }}>
+              Dibuat dengan ❤️ untuk roti terbaik
+            </p>
+          </div>
+        </div>
+      </footer>
+
+      {/* ── CART OFFCANVAS ───────────────────────────────────────── */}
+      {showCart && (
+        <div
+          className="offcanvas offcanvas-end show cart-offcanvas"
+          style={{ visibility: "visible", width: "400px" }}
+          tabIndex={-1}
+          id="offcanvasCart"
+          aria-labelledby="offcanvasCartLabel"
+        >
+          <div className="offcanvas-header">
+            <h5 className="offcanvas-title" id="offcanvasCartLabel">
+              <i className="bi bi-basket2 me-2" />Keranjang Pesanan
+            </h5>
+            <button
+              type="button"
+              className="btn-close btn-close-white"
+              onClick={() => setShowCart(false)}
+              id="btn-close-cart"
+              aria-label="Tutup"
+            />
+          </div>
+          <div className="offcanvas-body d-flex flex-column">
+            {cart.length === 0 ? (
+              <div className="text-center py-5 my-auto">
+                <div style={{ fontSize: "4rem" }}>🛒</div>
+                <h6 className="fw-bold mt-3">Keranjang kosong</h6>
+                <p className="text-muted small">Tambahkan roti favorit Anda dari menu di atas.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex-grow-1 overflow-auto">
+                  {cartByOutlet.map(([outletId, group]) => (
+                    <div key={outletId} className="mb-3">
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <i className="bi bi-shop text-warning" />
+                        <span className="fw-bold small">{group.outletName}</span>
+                      </div>
+                      {group.items.map((item) => (
+                        <div key={item.key} className="cart-item">
+                          <div className="d-flex justify-content-between align-items-start">
+                            <div className="flex-grow-1">
+                              <div className="fw-semibold small">{item.product.title}</div>
+                              <div className="text-muted" style={{ fontSize: "0.8rem" }}>
+                                {formatRupiah(item.price)} / pcs
+                              </div>
+                            </div>
+                            <div className="d-flex align-items-center gap-2 ms-3">
+                              <button
+                                className="btn btn-sm btn-light rounded-circle"
+                                style={{ width: 28, height: 28, padding: 0 }}
+                                onClick={() => updateQty(item.key, -1)}
+                              >-</button>
+                              <span className="fw-bold">{item.quantity}</span>
+                              <button
+                                className="btn btn-sm btn-light rounded-circle"
+                                style={{ width: 28, height: 28, padding: 0 }}
+                                onClick={() => updateQty(item.key, 1)}
+                                disabled={item.quantity >= item.stock}
+                              >+</button>
+                              <button
+                                className="btn btn-sm btn-link text-danger p-0 ms-1"
+                                onClick={() => removeFromCart(item.key)}
+                              >
+                                <i className="bi bi-trash" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="text-end fw-bold small mt-1" style={{ color: "var(--yuki-primary)" }}>
+                            {formatRupiah(item.price * item.quantity)}
                           </div>
                         </div>
-                      </div>
-
-                      {/* Right Action buttons */}
-                      <div className="d-flex align-items-center gap-2">
-                        {/* Priority Badge */}
-                        <span
-                          className={`badge px-2.5 py-1.5 rounded-pill text-uppercase fw-semibold d-none d-sm-inline-block ${task.priority === "high"
-                            ? "bg-danger bg-opacity-10 text-danger border border-danger-subtle"
-                            : task.priority === "medium"
-                              ? "bg-warning bg-opacity-10 text-warning border border-warning-subtle"
-                              : "bg-success bg-opacity-10 text-success border border-success-subtle"
-                            }`}
-                          style={{ fontSize: "0.7rem" }}
-                        >
-                          {task.priority === "high" ? "Tinggi" : task.priority === "medium" ? "Sedang" : "Rendah"}
-                        </span>
-
-                        {/* Delete button */}
-                        <button
-                          onClick={() => deleteTask(task.id)}
-                          className="btn btn-outline-danger btn-sm border-0 rounded-circle d-flex align-items-center justify-content-center"
-                          style={{ width: "32px", height: "32px" }}
-                        >
-                          <i className="bi bi-trash3-fill"></i>
-                        </button>
-                      </div>
+                      ))}
                     </div>
-                  ))
+                  ))}
+                </div>
+
+                <div className="cart-summary mt-3">
+                  <div className="d-flex justify-content-between fw-bold mb-3">
+                    <span>Total Pembayaran</span>
+                    <span style={{ color: "var(--yuki-primary)", fontSize: "1.1rem" }}>
+                      {formatRupiah(cartTotal)}
+                    </span>
+                  </div>
+                  <button
+                    id="btn-checkout"
+                    className="btn btn-yuki w-100"
+                    onClick={() => { setShowCart(false); setShowOrderModal(true); setOrderSuccess(null); setOrderError(""); }}
+                  >
+                    <i className="bi bi-bag-check-fill me-2" />Lanjutkan Pemesanan
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showCart && (
+        <div className="offcanvas-backdrop fade show" onClick={() => setShowCart(false)} />
+      )}
+
+      {/* ── ORDER MODAL ──────────────────────────────────────────── */}
+      {showOrderModal && (
+        <div className="modal fade show d-block" tabIndex={-1} id="modalOrder" aria-modal="true" role="dialog">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title fw-bold">
+                  <i className="bi bi-bag-heart me-2" />Konfirmasi Pesanan
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setShowOrderModal(false)}
+                  id="btn-close-modal"
+                  aria-label="Tutup"
+                />
+              </div>
+              <div className="modal-body p-4">
+                {orderSuccess ? (
+                  <div className="text-center py-3">
+                    <div style={{ fontSize: "4rem" }}>✅</div>
+                    <h5 className="fw-bold mt-3">Pesanan Berhasil Dibuat!</h5>
+                    <p className="text-muted">
+                      Pesanan Anda sedang menunggu konfirmasi dari admin outlet.
+                    </p>
+                    {orderSuccess.map((r) => (
+                      <div key={r.bookingId} className="alert alert-success text-start small">
+                        <strong>{r.outletName}</strong> — Booking ID: #{r.bookingId}
+                      </div>
+                    ))}
+                    <button
+                      id="btn-order-done"
+                      className="btn btn-yuki mt-2"
+                      onClick={() => setShowOrderModal(false)}
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold" htmlFor="input-customer-name">Nama Lengkap</label>
+                      <input
+                        id="input-customer-name"
+                        type="text"
+                        className="form-control"
+                        placeholder="Masukkan nama lengkap Anda"
+                        value={orderForm.name}
+                        onChange={(e) => setOrderForm({ ...orderForm, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold" htmlFor="input-customer-phone">Nomor Telepon</label>
+                      <input
+                        id="input-customer-phone"
+                        type="tel"
+                        className="form-control"
+                        placeholder="Contoh: 08123456789"
+                        value={orderForm.phone}
+                        onChange={(e) => setOrderForm({ ...orderForm, phone: e.target.value })}
+                      />
+                    </div>
+                    {orderError && (
+                      <div className="alert alert-danger small" id="order-error-msg">{orderError}</div>
+                    )}
+                    <div className="d-flex align-items-center justify-content-between mt-4">
+                      <div>
+                        <div className="small text-muted">Total Pesanan</div>
+                        <div className="fw-bold" style={{ color: "var(--yuki-primary)", fontSize: "1.2rem" }}>
+                          {formatRupiah(cartTotal)}
+                        </div>
+                      </div>
+                      <button
+                        id="btn-submit-order"
+                        className="btn btn-yuki"
+                        onClick={handleOrder}
+                        disabled={orderLoading}
+                      >
+                        {orderLoading ? (
+                          <><span className="spinner-border spinner-border-sm me-2" />Memproses...</>
+                        ) : (
+                          <><i className="bi bi-send-fill me-2" />Kirim Pesanan</>
+                        )}
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
           </div>
+          <div className="modal-backdrop fade show" onClick={() => !orderLoading && setShowOrderModal(false)} />
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── ProductCard Component ────────────────────────────────────────
+function ProductCard({ product, onAddToCart }) {
+  const [selectedStockIdx, setSelectedStockIdx] = useState(0);
+
+  const availableStocks = product.stocks.filter((s) => s.stock > 0);
+  const selectedStock = availableStocks[selectedStockIdx] || product.stocks[0];
+
+  const minPriceVal = product.stocks.length > 0
+    ? Math.min(...product.stocks.map((s) => s.price))
+    : 0;
+
+  const emoji = BREAD_EMOJIS[product.category] || "🍞";
+
+  return (
+    <div className="product-card" id={`product-card-${product.id}`}>
+      <div className="product-card-img-placeholder">{emoji}</div>
+      <div className="product-card-body">
+        <span className="product-category-badge">{product.category}</span>
+        <h3 className="product-title">{product.title}</h3>
+        <p className="product-desc">{product.description}</p>
+
+        {/* Available outlets */}
+        <div className="product-outlets">
+          {product.stocks.map((s) => (
+            <span key={s.id} className="outlet-tag">
+              <i className="bi bi-shop" style={{ fontSize: "0.65rem" }} />
+              {s.outlet?.name?.replace("Toko Roti Yuki - ", "") || "Outlet"}
+              {s.stock === 0 && " (Habis)"}
+            </span>
+          ))}
+        </div>
+
+        {product.stocks.some((s) => s.promoText) && (
+          <span className="promo-badge mb-2 d-inline-block">
+            <i className="bi bi-lightning-charge-fill me-1" />PROMO
+          </span>
+        )}
+
+        <div className="product-footer">
+          <div>
+            <p className="product-price-from mb-0">Mulai dari</p>
+            <div className="product-price">
+              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(minPriceVal)}
+            </div>
+          </div>
+
+          {availableStocks.length > 0 ? (
+            <div className="d-flex flex-column align-items-end gap-1">
+              {availableStocks.length > 1 && (
+                <select
+                  className="form-select form-select-sm"
+                  style={{ fontSize: "0.72rem", maxWidth: "130px" }}
+                  value={selectedStockIdx}
+                  onChange={(e) => setSelectedStockIdx(parseInt(e.target.value))}
+                  id={`select-outlet-${product.id}`}
+                  aria-label="Pilih outlet"
+                >
+                  {availableStocks.map((s, i) => (
+                    <option key={s.id} value={i}>
+                      {s.outlet?.name?.replace("Toko Roti Yuki - ", "") || "Outlet"}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                id={`btn-add-${product.id}`}
+                className="btn btn-yuki btn-sm"
+                onClick={() => onAddToCart(product, selectedStock)}
+              >
+                <i className="bi bi-cart-plus me-1" />Pesan
+              </button>
+            </div>
+          ) : (
+            <span className="badge bg-secondary">Stok Habis</span>
+          )}
         </div>
       </div>
-
-      {/* Footer */}
-      <footer className="py-4 border-top border-light-subtle bg-white mt-auto">
-        <div className="container d-flex flex-column flex-md-row align-items-center justify-content-between">
-          <div className="text-muted small mb-2 mb-md-0">
-            &copy; {new Date().getFullYear()} Yuki TaskFlow. Dibuat untuk kelancaran tugas kuliah S4.
-          </div>
-          <div className="d-flex gap-3 text-muted small">
-            <a href="https://nextjs.org" className="text-decoration-none text-muted hover-zoom" target="_blank" rel="noreferrer">Next.js 16</a>
-            <span>&bull;</span>
-            <a href="https://getbootstrap.com" className="text-decoration-none text-muted hover-zoom" target="_blank" rel="noreferrer">Bootstrap 5</a>
-            <span>&bull;</span>
-            <a href="#" className="text-decoration-none text-muted hover-zoom">Yuki AMD</a>
-          </div>
-        </div>
-      </footer>
-    </>
+    </div>
   );
 }
